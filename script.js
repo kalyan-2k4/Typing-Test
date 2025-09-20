@@ -6,91 +6,198 @@ let array = [
 ]
 let i = 0, wpm = 0, error = 0, t = 0, j = array.length, k = 0, Wpm = 0, acc = 0;
 let s = array[k];
+let testFinished = false;
+let overlayRef = null;
+
+// Helper functions to avoid NaN / Infinity
+function computeWpm(chars, seconds) {
+    if (chars === 0 || seconds === 0) return 0;
+    return Math.round((chars / 5) / (seconds / 60));
+}
+function computeAccuracy(correctChars, totalErrors) {
+    if (correctChars === 0) return 100; // before typing starts
+    let value = ((correctChars - totalErrors) * 100 / correctChars);
+    if (value < 0) value = 0;
+    return +value.toFixed(2);
+}
+function computeNetWpm(chars, totalErrors, seconds) {
+    if (seconds === 0) return 0;
+    const minutes = seconds / 60;
+    // Net WPM = (Gross chars/5 - errors) / minutes
+    const grossWords = chars / 5;
+    const net = (grossWords - totalErrors) / minutes;
+    return Math.max(0, Math.round(net));
+}
+function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const sRem = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(sRem).padStart(2, '0')}`;
+}
+
 function timecalc() {
-    if (i == s.length - 1) {
-        return;
-    }
+    if (testFinished) return;
     t++;
     setTimeout(timecalc, 1000);
 }
+
+function updateLiveMetrics() {
+    Wpm = computeWpm(i, t);
+    acc = computeAccuracy(i, error);
+    const wpmEl = document.getElementById("wpm");
+    const accEl = document.getElementById("acc");
+    const typosEl = document.getElementById("typos");
+    if (!wpmEl || !accEl || !typosEl) return;
+    wpmEl.innerHTML = `WPM: <span class="metric-val">${Wpm}</span>`;
+    accEl.innerHTML = `Accuracy: <span class="metric-val">${acc}%</span>`;
+    typosEl.innerHTML = `Typos: <span class="metric-val">${error}</span>`;
+    // Pulse animation hook
+    [wpmEl, accEl].forEach(el => {
+        el.classList.remove('pulse');
+        void el.offsetWidth; // reflow to restart animation
+        el.classList.add('pulse');
+    });
+}
+
 function myFunction(event) {
-    if (event.key.toUpperCase() === "SHIFT")
-        return;
-    window.onkeydown = function (e) {
-        return event.key !== " ";
-    }
+    if (testFinished) return; // ignore after finish until reset
+    if (event.key.toUpperCase() === "SHIFT") return;
+
+    // prevent default space scroll
+    window.onkeydown = function (e) { return event.key !== " "; }
+
     let x = "ch" + event.key.toUpperCase();
     x = x.trim();
     let ch = event.key;
-    if (i == 0) {
+
+    // Start timer only once on first character attempt (correct or incorrect)
+    if (i === 0 && t === 0) {
         setTimeout(timecalc, 1000);
     }
-    if (ch == s.charAt(i)) {
+
+    if (ch === s.charAt(i)) {
         let value = "<span style='color:green;'>" + s.slice(0, i + 1) + "</span>" + s.slice(i + 1);
-        console.log(i + "is i, t is " + t);
-        let Wpm = ((i / 5) / (t / 60)).toFixed(0);
-        let acc = ((i - error) * 100 / i).toFixed(2);
-        document.getElementById("wpm").innerHTML = "Words Per Minute is " + Wpm;
-        document.getElementById("acc").innerHTML = "Accuracy with respect to Typing speed is " + acc + " %";
+        i++;
+        updateLiveMetrics();
         document.getElementById("text").innerHTML = value;
-        document.getElementById("typos").innerHTML = "Typos: " + error;
-        document.getElementById(x).style.backgroundColor = 'white';
-        document.getElementById(x).style.color = 'black';
-        setTimeout(function () {
-            document.getElementById(x).style.backgroundColor = 'black';
-            document.getElementById(x).style.color = 'white';
-            document.getElementById(x).style.borderColor = 'black';
-        }, 500);
-        ++i;
+        const typosEl = document.getElementById("typos");
+        typosEl.innerHTML = `Typos: <span class="metric-val">${error}</span>`;
+
+        const keyEl = document.getElementById(x);
+        if (keyEl) {
+            keyEl.style.backgroundColor = 'white';
+            keyEl.style.color = 'black';
+            setTimeout(function () {
+                keyEl.style.backgroundColor = 'black';
+                keyEl.style.color = 'white';
+                keyEl.style.borderColor = 'black';
+            }, 350);
+        }
+
+        // Finished current paragraph
         if (i === s.length) {
-            createAlert();
-            i = 0;
-            t = 0;
-            if (k == j - 1) {
-                k = 0;
-            }
-            else {
-                k++;
-            }
-            setTimeout(() => {
-                s = array[k];
-                text.innerText = array[k];
-                error = 0;
-                document.getElementById("typos").innerHTML = "Typos: " + error;
-            }, 1500);
+            finalizeAndShowResults();
+        }
+    } else {
+        // incorrect key
+        error++;
+        const typosEl = document.getElementById("typos");
+        if (typosEl) typosEl.innerHTML = `Typos: <span class="metric-val">${error}</span>`;
+        updateLiveMetrics();
+        const keyEl = document.getElementById(x);
+        if (keyEl) {
+            keyEl.style.backgroundColor = 'red';
+            keyEl.style.color = 'white';
+            setTimeout(function () {
+                keyEl.style.backgroundColor = 'black';
+                keyEl.style.color = 'white';
+                keyEl.style.borderColor = 'black';
+            }, 350);
         }
     }
-    else {
-        ++error;
-        document.getElementById("typos").innerHTML = "Typos: " + error;
-        document.getElementById(x).style.backgroundColor = 'red';
-        document.getElementById(x).style.color = 'white';
-        setTimeout(function () {
-            document.getElementById(x).style.backgroundColor = 'black';
-            document.getElementById(x).style.color = 'white';
-            document.getElementById(x).style.borderColor = 'black';
-        }, 500);
-    }
 }
+
+function finalizeAndShowResults() {
+    testFinished = true;
+    updateLiveMetrics(); // ensure latest values stored
+    const gross = Wpm;
+    const net = computeNetWpm(i, error, t);
+    const timeTaken = formatTime(t);
+    const chars = i;
+
+    createAlert({
+        grossWpm: gross,
+        netWpm: net,
+        accuracy: acc,
+        typos: error,
+        chars: chars,
+        time: timeTaken
+    });
+
+    // Queue next paragraph after closing or restart; keep state until restart.
+}
+
 let customAlert;
 
-function createAlert() {
+function createAlert(stats) {
+    // Overlay
+    overlayRef = document.createElement('div');
+    overlayRef.className = 'overlay';
+
     customAlert = document.createElement("div");
+    customAlert.className = 'custom-alert';
+
     customAlert.innerHTML = `
-  <div class="custom-alert ">
-  <h3>Typing Results</h3>
-  <p><b>WPM</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${Wpm}</p>
-  <p><b>Accuracy</b>&nbsp;&nbsp;: ${acc}%</p>
-  <p><b>Typos</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${error}</p>
-  <button onclick="removeAlert()">Close</button>
-  </div>`;
-    customAlert.style.position = "absolute";
-    customAlert.style.top = "50%";
-    customAlert.style.left = "50%";
-    customAlert.style.transform = "translate(-50%, -50%)";
-    document.body.appendChild(customAlert);
+        <button class="close-btn" aria-label="Close" onclick="removeAlert()">×</button>
+        <h3>Results</h3>
+        <div class="results-grid">
+            <div><label>Gross WPM</label><span>${stats.grossWpm}</span></div>
+            <div><label>Net WPM</label><span>${stats.netWpm}</span></div>
+            <div><label>Accuracy</label><span>${stats.accuracy}%</span></div>
+            <div><label>Typos</label><span>${stats.typos}</span></div>
+            <div><label>Chars</label><span>${stats.chars}</span></div>
+            <div><label>Time</label><span>${stats.time}</span></div>
+        </div>
+        <div class="alert-actions">
+            <button onclick="restartTest()" class="primary">Restart</button>
+            <button onclick="nextParagraph()">Next Paragraph</button>
+        </div>
+    `;
+
+    overlayRef.appendChild(customAlert);
+    document.body.appendChild(overlayRef);
 }
 
 function removeAlert() {
-    customAlert.parentNode.removeChild(customAlert);
+    if (overlayRef) {
+        overlayRef.parentNode.removeChild(overlayRef);
+        overlayRef = null;
+    }
 }
+
+function resetStateToCurrentParagraph() {
+    i = 0; error = 0; t = 0; testFinished = false; Wpm = 0; acc = 0;
+    document.getElementById("text").innerText = s;
+    document.getElementById("wpm").innerHTML = "WPM: <span class='metric-val'>0</span>";
+    document.getElementById("acc").innerHTML = "Accuracy: <span class='metric-val'>100%</span>";
+    document.getElementById("typos").innerHTML = "Typos: <span class='metric-val'>0</span>";
+}
+
+function restartTest() {
+    removeAlert();
+    resetStateToCurrentParagraph();
+}
+
+function nextParagraph() {
+    removeAlert();
+    // advance paragraph index
+    if (k === j - 1) { k = 0; } else { k++; }
+    s = array[k];
+    resetStateToCurrentParagraph();
+}
+
+// Initialize default metric text (avoid NaN / Infinity on load)
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById("wpm").innerHTML = "WPM: <span class='metric-val'>0</span>";
+    document.getElementById("acc").innerHTML = "Accuracy: <span class='metric-val'>100%</span>";
+    document.getElementById("typos").innerHTML = "Typos: <span class='metric-val'>0</span>";
+});
