@@ -62,8 +62,8 @@ function myFunction(event) {
     if (testFinished) return; // ignore after finish until reset
     if (event.key.toUpperCase() === "SHIFT") return;
 
-    // prevent default space scroll
-    window.onkeydown = function (e) { return event.key !== " "; }
+    // prevent default space scroll handled globally now
+    // removed window.onkeydown override which caused stale closure issues
 
     let x = "ch" + event.key.toUpperCase();
     x = x.trim();
@@ -200,4 +200,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById("wpm").innerHTML = "WPM: <span class='metric-val'>0</span>";
     document.getElementById("acc").innerHTML = "Accuracy: <span class='metric-val'>100%</span>";
     document.getElementById("typos").innerHTML = "Typos: <span class='metric-val'>0</span>";
+
+    const typingArea = document.querySelector('.textarea');
+    function ensureFocus() {
+        if (customAlert || testFinished) return; // avoid stealing focus during popup
+        if (document.activeElement !== typingArea) typingArea.focus();
+    }
+    // Global keydown listener replaces inline prevention
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') e.preventDefault(); // prevent page scroll
+        myFunction(e);
+    });
+    // Click anywhere on base layout to refocus for continued typing
+    ['#text','body','header','.keyboardstruct','#calc'].forEach(sel => {
+        const el = sel === 'body' ? document.body : document.querySelector(sel);
+        if (el) el.addEventListener('click', ensureFocus);
+    });
+    ensureFocus();
 });
