@@ -59,59 +59,49 @@ function updateLiveMetrics() {
 }
 
 function myFunction(event) {
-    if (testFinished) return; // ignore after finish until reset
-    if (event.key.toUpperCase() === "SHIFT") return;
+    if (testFinished) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const skipKeys = ["Shift","Backspace","Tab","CapsLock","Enter","Escape","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","PageUp","PageDown","Insert","Delete"]; 
+    if (skipKeys.includes(event.key)) return;
 
-    // prevent default space scroll handled globally now
-    // removed window.onkeydown override which caused stale closure issues
+    const expectedChar = s.charAt(i);
+    const inputChar = event.key; // preserves case
+    if (inputChar.length !== 1) return; // ignore non-printables
 
-    let x = "ch" + event.key.toUpperCase();
-    x = x.trim();
-    let ch = event.key;
+    if (i === 0 && t === 0) setTimeout(timecalc, 1000);
 
-    // Start timer only once on first character attempt (correct or incorrect)
-    if (i === 0 && t === 0) {
-        setTimeout(timecalc, 1000);
-    }
+    let keyId = (inputChar === ' ') ? 'ch' : 'ch' + inputChar.toUpperCase();
 
-    if (ch === s.charAt(i)) {
+    if (inputChar === expectedChar) {
         let value = "<span style='color:green;'>" + s.slice(0, i + 1) + "</span>" + s.slice(i + 1);
         i++;
         updateLiveMetrics();
         document.getElementById("text").innerHTML = value;
-        const typosEl = document.getElementById("typos");
-        typosEl.innerHTML = `Typos: <span class="metric-val">${error}</span>`;
-
-        const keyEl = document.getElementById(x);
+        const keyEl = document.getElementById(keyId);
         if (keyEl) {
             keyEl.style.backgroundColor = 'white';
             keyEl.style.color = 'black';
-            setTimeout(function () {
+            setTimeout(()=>{
                 keyEl.style.backgroundColor = 'black';
                 keyEl.style.color = 'white';
                 keyEl.style.borderColor = 'black';
-            }, 350);
+            },220);
         }
-
-        // Finished current paragraph
-        if (i === s.length) {
-            finalizeAndShowResults();
-        }
+        if (i === s.length) finalizeAndShowResults();
     } else {
-        // incorrect key
         error++;
+        updateLiveMetrics();
         const typosEl = document.getElementById("typos");
         if (typosEl) typosEl.innerHTML = `Typos: <span class="metric-val">${error}</span>`;
-        updateLiveMetrics();
-        const keyEl = document.getElementById(x);
+        const keyEl = document.getElementById(keyId);
         if (keyEl) {
             keyEl.style.backgroundColor = 'red';
             keyEl.style.color = 'white';
-            setTimeout(function () {
+            setTimeout(()=>{
                 keyEl.style.backgroundColor = 'black';
                 keyEl.style.color = 'white';
                 keyEl.style.borderColor = 'black';
-            }, 350);
+            },320);
         }
     }
 }
